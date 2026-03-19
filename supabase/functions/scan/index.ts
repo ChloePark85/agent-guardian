@@ -286,138 +286,104 @@ function getRiskLevel(score: number): string {
   return "DANGEROUS";
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Content-Type": "application/json",
+};
+
 serve(async (req) => {
-  // CORS headers
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-      },
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { files, skill_name, framework, source } = await req.json();
+    const body = await req.json();
+    const files = body.files;
+    const skillName = body.skill_name || body.name || "Unknown";
+    const framework = body.framework || null;
+    const source = body.source || null;
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return new Response(
         JSON.stringify({ error: "No files provided" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    // Scan files
+    // Run scan
     const startTime = Date.now();
-    const scanResult = scanFiles(files);
-    const scanDuration = Date.now() - startTime;
-
-    const riskScore = calculateRiskScore(scanResult.findings);
+    const result = scanFiles(files);
+    const duration = Date.now() - startTime;
+    const riskScore = calculateRiskScore(result.findings);
     const riskLevel = getRiskLevel(riskScore);
 
-    // Save to database
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Try to save to DB if user is authenticated
+    let scanId: string | null = null;
 
-    // Get user from JWT
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "No authorization header" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, serviceKey);
 
-    const token = authHeader.replace("Bearer ", "");
-    
-    // Try to get user from JWT
-    let userId: string | null = null;
-    const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    
-    if (userData?.user) {
-      userId = userData.user.id;
-    } else {
-      // Allow anonymous scan (no DB save, just return results)
-      const scanResult = scanFiles(files);
-      const scanDuration = Date.now() - startTime;
-      const riskScore = calculateRiskScore(scanResult.findings);
-      const riskLevel = getRiskLevel(riskScore);
-      
-      return new Response(
-        JSON.stringify({
-          scan_id: null,
-          risk_score: riskScore,
-          risk_level: riskLevel,
-          findings_count: scanResult.findings.length,
-          findings: scanResult.findings,
-          urls: scanResult.urls,
-          files_scanned: scanResult.files_scanned,
-          lines_scanned: scanResult.lines_scanned,
-          scan_duration_ms: scanDuration,
-        }),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
+      const authHeader = req.headers.get("Authorization");
+      const token = authHeader?.replace("Bearer ", "") || "";
+
+      if (token) {
+        const { data: userData } = await supabase.auth.getUser(token);
+        if (userData?.user) {
+          const userId = userData.user.id;
+
+          const { data: scan } = await supabase
+            .from("scans")
+            .insert({
+              user_id: userId,
+              skill_name: skillName,
+              source,
+              risk_score: riskScore,
+              risk_level: riskLevel,
+              findings_count: result.findings.length,
+              findings: result.findings,
+              urls: result.urls,
+              files_scanned: result.files_scanned,
+              lines_scanned: result.lines_scanned,
+              framework,
+              scan_duration_ms: duration,
+            })
+            .select("id")
+            .single();
+
+          if (scan) {
+            scanId = scan.id;
+            await supabase.rpc("increment_scan_count", { p_user_id: userId }).catch(() => {});
+          }
         }
-      );
+      }
+    } catch (dbErr) {
+      console.error("DB save error (non-fatal):", dbErr);
     }
-
-    // Insert scan result
-    const { data: scan, error: scanError } = await supabase
-      .from("scans")
-      .insert({
-        user_id: userId,
-        skill_name: skill_name || "Unknown",
-        source: source || null,
-        risk_score: riskScore,
-        risk_level: riskLevel,
-        findings_count: scanResult.findings.length,
-        findings: scanResult.findings,
-        urls: scanResult.urls,
-        files_scanned: scanResult.files_scanned,
-        lines_scanned: scanResult.lines_scanned,
-        framework: framework || null,
-        scan_duration_ms: scanDuration,
-      })
-      .select()
-      .single();
-
-    if (scanError) {
-      console.error("Database error:", scanError);
-      return new Response(
-        JSON.stringify({ error: "Failed to save scan result" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Update user's scan count
-    await supabase.rpc("increment_scan_count", { p_user_id: userId });
 
     return new Response(
       JSON.stringify({
-        scan_id: scan.id,
+        scan_id: scanId,
+        skill_name: skillName,
         risk_score: riskScore,
         risk_level: riskLevel,
-        findings_count: scanResult.findings.length,
-        files_scanned: scanResult.files_scanned,
-        lines_scanned: scanResult.lines_scanned,
+        findings_count: result.findings.length,
+        findings: result.findings,
+        urls: result.urls,
+        files_scanned: result.files_scanned,
+        lines_scanned: result.lines_scanned,
+        scan_duration_ms: duration,
       }),
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
+      { headers: corsHeaders }
     );
   } catch (error) {
     console.error("Scan error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({ error: error.message || "Internal server error" }),
+      { status: 500, headers: corsHeaders }
     );
   }
 });
