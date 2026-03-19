@@ -51,34 +51,41 @@ const Scan = () => {
 
       // Get auth token
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast({
-          title: "Error",
-          description: "You must be logged in to scan",
-          variant: "destructive",
-        });
-        setScanning(false);
-        return;
+
+      // Call scan API directly
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      // Call edge function
-      const { data, error } = await supabase.functions.invoke('scan', {
-        body: {
+      const response = await fetch(`${supabaseUrl}/functions/v1/scan`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
           files,
           skill_name: fileName || githubUrl,
           framework,
           source: tab === "github" ? githubUrl : null,
-        },
+        }),
       });
 
-      if (error) throw error;
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Scan failed");
 
       toast({
         title: "Scan complete!",
-        description: `Risk score: ${data.risk_score}`,
+        description: `Risk score: ${data.risk_score} (${data.risk_level})`,
       });
 
-      navigate(`/scan/${data.scan_id}`);
+      if (data.scan_id) {
+        navigate(`/scan/${data.scan_id}`);
+      } else {
+        // No DB save (anonymous), show results inline via state
+        navigate(`/scan/result`, { state: { scanData: data } });
+      }
     } catch (error: any) {
       console.error("Scan error:", error);
       toast({
