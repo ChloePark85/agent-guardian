@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Scan from "./pages/Scan";
 import ScanResult from "./pages/ScanResult";
 import Pricing from "./pages/Pricing";
+import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,6 +24,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/scan" element={<ProtectedRoute><Scan /></ProtectedRoute>} />
           <Route path="/scan/:id" element={<ProtectedRoute><ScanResult /></ProtectedRoute>} />
