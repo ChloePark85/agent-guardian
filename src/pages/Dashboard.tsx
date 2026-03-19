@@ -20,13 +20,13 @@ const Dashboard = () => {
     <AppLayout>
       <div className="max-w-5xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Dashboard</h1>
+            <h1 className="text-xl sm:text-2xl font-bold mb-1">Dashboard</h1>
             <p className="text-sm text-muted-foreground">Monitor your AI agent security posture</p>
           </div>
           <Link to="/scan">
-            <Button variant="hero">
+            <Button variant="hero" className="w-full sm:w-auto">
               <Plus className="w-4 h-4" />
               New Scan
             </Button>
@@ -34,10 +34,10 @@ const Dashboard = () => {
         </div>
 
         {/* Usage Bar */}
-        <div className="border border-border rounded-[4px] bg-surface p-4 mb-8 shadow-hard">
+        <div className="border border-border rounded-[4px] bg-surface p-4 mb-6 sm:mb-8 shadow-hard">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">
-              <span className="font-mono-data text-foreground">{scansUsed}/{scanLimit}</span> scans used this month
+              <span className="font-mono-data text-foreground">{scansUsed}/{scanLimit}</span> scans used
             </span>
             <span className="text-xs font-mono-data bg-accent px-2 py-0.5 rounded-[4px] text-accent-foreground">{plan}</span>
           </div>
@@ -63,32 +63,53 @@ const Dashboard = () => {
               </Link>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground text-left">
-                  <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-4 py-3 font-medium">Framework</th>
-                  <th className="px-4 py-3 font-medium">Risk Score</th>
-                  <th className="px-4 py-3 font-medium">Findings</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-muted-foreground text-left">
+                      <th className="px-4 py-3 font-medium">Name</th>
+                      <th className="px-4 py-3 font-medium">Framework</th>
+                      <th className="px-4 py-3 font-medium">Risk Score</th>
+                      <th className="px-4 py-3 font-medium">Findings</th>
+                      <th className="px-4 py-3 font-medium">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mockScans.map((scan) => (
+                      <tr key={scan.id} className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer">
+                        <td className="px-4 py-3">
+                          <Link to={`/scan/${scan.id}`} className="text-foreground hover:text-primary transition-colors font-medium">
+                            {scan.name}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground font-mono-data text-xs">{scan.framework}</td>
+                        <td className="px-4 py-3"><RiskBadge score={scan.score} /></td>
+                        <td className="px-4 py-3 font-mono-data text-muted-foreground">{scan.findings}</td>
+                        <td className="px-4 py-3 font-mono-data text-muted-foreground text-xs">{scan.date}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-border">
                 {mockScans.map((scan) => (
-                  <tr key={scan.id} className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer">
-                    <td className="px-4 py-3">
-                      <Link to={`/scan/${scan.id}`} className="text-foreground hover:text-primary transition-colors font-medium">
-                        {scan.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground font-mono-data text-xs">{scan.framework}</td>
-                    <td className="px-4 py-3"><RiskBadge score={scan.score} /></td>
-                    <td className="px-4 py-3 font-mono-data text-muted-foreground">{scan.findings}</td>
-                    <td className="px-4 py-3 font-mono-data text-muted-foreground text-xs">{scan.date}</td>
-                  </tr>
+                  <Link key={scan.id} to={`/scan/${scan.id}`} className="block p-4 hover:bg-accent/30 transition-colors">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-foreground truncate mr-2">{scan.name}</span>
+                      <RiskBadge score={scan.score} />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="font-mono-data">{scan.framework}</span>
+                      <span>{scan.findings} findings</span>
+                      <span className="font-mono-data">{scan.date}</span>
+                    </div>
+                  </Link>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       </div>
