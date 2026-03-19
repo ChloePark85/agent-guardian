@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Upload, Globe, ScanLine } from "lucide-react";
+import { Upload, Globe, ScanLine, ShieldAlert, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/AppLayout";
 import { motion } from "framer-motion";
@@ -13,6 +13,25 @@ const frameworks = ["LangChain", "CrewAI", "OpenClaw", "Other"];
 const Scan = () => {
   const [tab, setTab] = useState<"upload" | "github">("upload");
   const [framework, setFramework] = useState("LangChain");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [usageInfo, setUsageInfo] = useState<{ used: number; limit: number; plan: string } | null>(null);
+
+  useEffect(() => {
+    const checkUsage = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("scans_used_this_month, scan_limit, plan")
+          .eq("id", user.id)
+          .single();
+        if (data) {
+          setUsageInfo({ used: data.scans_used_this_month, limit: data.scan_limit, plan: data.plan });
+        }
+      }
+    };
+    checkUsage();
+  }, []);
   const [isDragging, setIsDragging] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [fileName, setFileName] = useState("");
@@ -22,6 +41,12 @@ const Scan = () => {
   const { toast } = useToast();
 
   const handleScan = async () => {
+    // Check usage limit
+    if (usageInfo && usageInfo.used >= usageInfo.limit) {
+      setShowUpgradeModal(true);
+      return;
+    }
+
     try {
       setScanning(true);
 
@@ -221,6 +246,60 @@ const Scan = () => {
           </>
         )}
       </div>
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-md border border-border rounded-[4px] bg-background p-8 shadow-hard"
+          >
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <ShieldAlert className="w-6 h-6 text-primary" />
+              </div>
+            </div>
+            <h2 className="text-xl font-bold text-center mb-2">Scan Limit Reached</h2>
+            <p className="text-sm text-muted-foreground text-center mb-6">
+              You've used all <span className="text-foreground font-medium">{usageInfo?.limit}</span> free scans this month. 
+              Upgrade to Pro for 100 scans/month + PDF reports + CI/CD integration.
+            </p>
+
+            <div className="border border-primary/30 rounded-[4px] bg-primary/5 p-4 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-bold text-lg">Pro Plan</span>
+                <span className="text-2xl font-bold">$49<span className="text-sm text-muted-foreground font-normal">/mo</span></span>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-primary" /> 100 scans per month</li>
+                <li className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-primary" /> PDF compliance reports</li>
+                <li className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-primary" /> CI/CD integration (GitHub Actions)</li>
+                <li className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-primary" /> Email support</li>
+              </ul>
+            </div>
+
+            <div className="space-y-3">
+              <Button
+                variant="hero"
+                size="lg"
+                className="w-full"
+                onClick={() => navigate("/pricing")}
+              >
+                Upgrade to Pro
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={() => setShowUpgradeModal(false)}
+              >
+                Maybe Later
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </AppLayout>
   );
 };
