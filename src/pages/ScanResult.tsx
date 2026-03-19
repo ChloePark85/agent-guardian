@@ -39,17 +39,17 @@ const ScanResult = () => {
   return (
     <AppLayout>
       <div className="max-w-4xl">
-        <Link to="/dashboard" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">
+        <Link to="/dashboard" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 sm:mb-6">
           <ArrowLeft className="w-4 h-4" />
           Back to Dashboard
         </Link>
 
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold mb-1">{mockResult.name}</h1>
-            <p className="text-sm text-muted-foreground font-mono-data">{mockResult.framework} · Scan ID: {id}</p>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 sm:mb-8">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold mb-1 truncate">{mockResult.name}</h1>
+            <p className="text-sm text-muted-foreground font-mono-data">{mockResult.framework} · {id}</p>
           </div>
-          <Button variant="outline" disabled className="gap-2 relative group">
+          <Button variant="outline" disabled className="gap-2 relative group shrink-0">
             <Download className="w-4 h-4" />
             Download PDF
             <Lock className="w-3 h-3" />
@@ -60,48 +60,48 @@ const ScanResult = () => {
         </div>
 
         {/* Risk Gauge + Stats */}
-        <div className="grid md:grid-cols-[auto_1fr] gap-8 mb-8">
-          <div className="border border-border rounded-[4px] bg-surface p-8 shadow-hard flex justify-center">
+        <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-4 sm:gap-8 mb-6 sm:mb-8">
+          <div className="border border-border rounded-[4px] bg-surface p-6 sm:p-8 shadow-hard flex justify-center">
             <RiskGauge score={mockResult.score} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             {[
               { label: "Files Scanned", value: mockResult.filesScanned, icon: FileCode },
               { label: "Lines Scanned", value: mockResult.linesScanned.toLocaleString(), icon: FileCode },
               { label: "Findings", value: mockResult.findingsCount, icon: AlertTriangle },
-              { label: "Scan Duration", value: mockResult.duration, icon: Clock },
+              { label: "Duration", value: mockResult.duration, icon: Clock },
             ].map((stat) => (
-              <div key={stat.label} className="border border-border rounded-[4px] bg-surface p-4 shadow-hard">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <stat.icon className="w-4 h-4" />
+              <div key={stat.label} className="border border-border rounded-[4px] bg-surface p-3 sm:p-4 shadow-hard">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground mb-1">
+                  <stat.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span className="text-xs">{stat.label}</span>
                 </div>
-                <span className="text-xl font-bold font-mono-data">{stat.value}</span>
+                <span className="text-lg sm:text-xl font-bold font-mono-data">{stat.value}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Findings Table */}
-        <div className="border border-border rounded-[4px] bg-surface shadow-hard overflow-hidden mb-8">
+        {/* Findings */}
+        <div className="border border-border rounded-[4px] bg-surface shadow-hard overflow-hidden mb-6 sm:mb-8">
           <div className="px-4 py-3 border-b border-border">
             <h2 className="text-sm font-semibold">Findings</h2>
           </div>
           <div className="divide-y divide-border">
             {mockResult.findings.map((f, i) => (
-              <div key={i} className="p-4">
-                <div className="flex items-center gap-3 mb-2">
+              <div key={i} className="p-3 sm:p-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                   <span className={`text-xs font-bold font-mono-data px-2 py-0.5 rounded-[4px] border ${severityColor[f.severity]}`}>
                     {f.severity}
                   </span>
-                  <span className="text-sm font-mono-data text-muted-foreground">
+                  <span className="text-xs sm:text-sm font-mono-data text-muted-foreground">
                     {f.file}:{f.line}
                   </span>
                 </div>
                 <p className="text-sm mb-3">{f.desc}</p>
-                <div className="bg-[#010409] border border-border rounded-[4px] p-3 font-mono-data text-xs overflow-x-auto">
+                <div className="bg-[#010409] border border-border rounded-[4px] p-2 sm:p-3 font-mono-data text-xs overflow-x-auto">
                   <div className={`${f.severity === "HIGH" ? "bg-danger/10 border-l-2 border-danger" : ""} px-2 py-1`}>
-                    <span className="text-muted-foreground mr-3">{f.line}</span>
+                    <span className="text-muted-foreground mr-2 sm:mr-3">{f.line}</span>
                     <span className="text-foreground">{f.code}</span>
                   </div>
                 </div>
@@ -117,12 +117,12 @@ const ScanResult = () => {
           </div>
           <div className="divide-y divide-border">
             {mockResult.urls.map((u, i) => (
-              <div key={i} className="px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-mono-data">{u.url}</span>
+              <div key={i} className="px-3 sm:px-4 py-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="text-xs sm:text-sm font-mono-data truncate">{u.url}</span>
                 </div>
-                <span className={`text-xs font-bold font-mono-data px-2 py-0.5 rounded-[4px] ${
+                <span className={`text-xs font-bold font-mono-data px-2 py-0.5 rounded-[4px] shrink-0 ${
                   u.status === "safe" ? "bg-safe/10 text-safe" : "bg-danger/10 text-danger"
                 }`}>
                   {u.status.toUpperCase()}
