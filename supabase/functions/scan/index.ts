@@ -331,16 +331,40 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
+    
+    // Try to get user from JWT
+    let userId: string | null = null;
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
-
-    if (userError || !userData?.user) {
+    
+    if (userData?.user) {
+      userId = userData.user.id;
+    } else {
+      // Allow anonymous scan (no DB save, just return results)
+      const scanResult = scanFiles(files);
+      const scanDuration = Date.now() - startTime;
+      const riskScore = calculateRiskScore(scanResult.findings);
+      const riskLevel = getRiskLevel(riskScore);
+      
       return new Response(
-        JSON.stringify({ error: "Invalid token" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          scan_id: null,
+          risk_score: riskScore,
+          risk_level: riskLevel,
+          findings_count: scanResult.findings.length,
+          findings: scanResult.findings,
+          urls: scanResult.urls,
+          files_scanned: scanResult.files_scanned,
+          lines_scanned: scanResult.lines_scanned,
+          scan_duration_ms: scanDuration,
+        }),
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
       );
     }
-
-    const userId = userData.user.id;
 
     // Insert scan result
     const { data: scan, error: scanError } = await supabase
@@ -371,7 +395,7 @@ serve(async (req) => {
     }
 
     // Update user's scan count
-    await supabase.rpc("increment_scan_count", { user_id: userId });
+    await supabase.rpc("increment_scan_count", { p_user_id: userId });
 
     return new Response(
       JSON.stringify({
