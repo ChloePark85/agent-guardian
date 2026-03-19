@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Shield, Check, ArrowLeft, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabase";
 
 const plans = [
   {
@@ -38,6 +39,26 @@ const plans = [
 
 const Pricing = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setIsLoggedIn(!!data?.user);
+    });
+  }, []);
+
+  const getLink = (planName: string) => {
+    if (planName === "Free") return isLoggedIn ? "/scan" : "/auth";
+    if (planName === "Enterprise") return "mailto:contact@ubik.systems";
+    // Pro & Team - coming soon (Lemon Squeezy 연동 전)
+    return isLoggedIn ? "/dashboard" : "/auth";
+  };
+
+  const getCta = (planName: string, defaultCta: string) => {
+    if (planName === "Free") return isLoggedIn ? "Start Scanning" : "Get Started";
+    if (planName === "Enterprise") return "Contact Us";
+    return "Coming Soon";
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -52,7 +73,7 @@ const Pricing = () => {
               <ArrowLeft className="w-4 h-4" />
               Dashboard
             </Link>
-            <Link to="/auth">
+            <Link to={isLoggedIn ? "/scan" : "/auth"}>
               <Button variant="hero" size="sm">Start Free Scan</Button>
             </Link>
           </div>
@@ -71,7 +92,7 @@ const Pricing = () => {
             className="md:hidden absolute top-16 left-0 right-0 bg-surface border-b border-border z-50 px-4 py-4 space-y-3"
           >
             <Link to="/dashboard" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMenuOpen(false)}>Dashboard</Link>
-            <Link to="/auth" onClick={() => setMenuOpen(false)}>
+            <Link to={isLoggedIn ? "/scan" : "/auth"} onClick={() => setMenuOpen(false)}>
               <Button variant="hero" size="sm" className="w-full">Start Free Scan</Button>
             </Link>
           </motion.div>
@@ -108,9 +129,13 @@ const Pricing = () => {
                     </li>
                   ))}
                 </ul>
-                <Link to="/auth">
-                  <Button variant={plan.popular ? "hero" : "outline"} className="w-full">
-                    {plan.cta}
+                <Link to={getLink(plan.name)}>
+                  <Button 
+                    variant={plan.popular ? "hero" : "outline"} 
+                    className="w-full"
+                    disabled={plan.name !== "Free" && plan.name !== "Enterprise"}
+                  >
+                    {getCta(plan.name, plan.cta)}
                   </Button>
                 </Link>
               </div>
