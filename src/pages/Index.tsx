@@ -4,7 +4,7 @@ import { Shield, ScanLine, FileText, Layers, Check, ArrowRight } from "lucide-re
 import { Button } from "@/components/ui/button";
 import LiveTerminal from "@/components/LiveTerminal";
 
-const ease = [0.16, 1, 0.3, 1];
+const ease = [0.16, 1, 0.3, 1] as const;
 
 const features = [
   {
