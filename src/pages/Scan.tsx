@@ -4,6 +4,9 @@ import { Upload, Globe, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/AppLayout";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
+import JSZip from "jszip";
 
 const frameworks = ["LangChain", "CrewAI", "OpenClaw", "Other"];
 
@@ -13,14 +16,78 @@ const Scan = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [fileData, setFileData] = useState<File | null>(null);
   const [githubUrl, setGithubUrl] = useState("");
   const navigate = useNavigate();
+  const { toast } = useToast();
 
-  const handleScan = () => {
-    setScanning(true);
-    setTimeout(() => {
-      navigate("/scan/scan-1");
-    }, 3000);
+  const handleScan = async () => {
+    try {
+      setScanning(true);
+
+      let files: Array<{ name: string; content: string }> = [];
+
+      if (tab === "upload" && fileData) {
+        // Extract files from zip
+        const zip = await JSZip.loadAsync(fileData);
+        const filePromises: Promise<void>[] = [];
+
+        zip.forEach((relativePath, file) => {
+          if (!file.dir) {
+            filePromises.push(
+              file.async("text").then((content) => {
+                files.push({ name: relativePath, content });
+              })
+            );
+          }
+        });
+
+        await Promise.all(filePromises);
+      } else if (tab === "github" && githubUrl) {
+        // For now, just pass the URL to the edge function
+        // The edge function will handle downloading
+        files = [{ name: "github", content: githubUrl }];
+      }
+
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to scan",
+          variant: "destructive",
+        });
+        setScanning(false);
+        return;
+      }
+
+      // Call edge function
+      const { data, error } = await supabase.functions.invoke('scan', {
+        body: {
+          files,
+          skill_name: fileName || githubUrl,
+          framework,
+          source: tab === "github" ? githubUrl : null,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Scan complete!",
+        description: `Risk score: ${data.risk_score}`,
+      });
+
+      navigate(`/scan/${data.scan_id}`);
+    } catch (error: any) {
+      console.error("Scan error:", error);
+      toast({
+        title: "Scan failed",
+        description: error.message || "An error occurred during scanning",
+        variant: "destructive",
+      });
+      setScanning(false);
+    }
   };
 
   return (
@@ -78,7 +145,11 @@ const Scan = () => {
                 onDrop={(e) => {
                   e.preventDefault();
                   setIsDragging(false);
-                  if (e.dataTransfer.files[0]) setFileName(e.dataTransfer.files[0].name);
+                  const file = e.dataTransfer.files[0];
+                  if (file) {
+                    setFileName(file.name);
+                    setFileData(file);
+                  }
                 }}
                 onClick={() => {
                   const input = document.createElement("input");
@@ -86,7 +157,10 @@ const Scan = () => {
                   input.accept = ".zip";
                   input.onchange = (e) => {
                     const file = (e.target as HTMLInputElement).files?.[0];
-                    if (file) setFileName(file.name);
+                    if (file) {
+                      setFileName(file.name);
+                      setFileData(file);
+                    }
                   };
                   input.click();
                 }}

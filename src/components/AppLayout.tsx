@@ -1,6 +1,7 @@
 import { useState, ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Shield, LayoutDashboard, ScanLine, CreditCard, LogOut, Menu, X } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -11,6 +12,12 @@ const navItems = [
 const AppLayout = ({ children }: { children: ReactNode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
+  };
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -68,14 +75,16 @@ const AppLayout = ({ children }: { children: ReactNode }) => {
           })}
         </nav>
         <div className="px-3 py-4 border-t border-border">
-          <Link
-            to="/auth"
-            onClick={() => setSidebarOpen(false)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-[4px] text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors duration-200"
+          <button
+            onClick={() => {
+              setSidebarOpen(false);
+              handleSignOut();
+            }}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-[4px] text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors duration-200 w-full text-left"
           >
             <LogOut className="w-4 h-4" />
             Sign Out
-          </Link>
+          </button>
         </div>
       </aside>
 

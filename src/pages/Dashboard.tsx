@@ -3,18 +3,48 @@ import { Plus, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/AppLayout";
 import RiskBadge from "@/components/RiskBadge";
-
-const mockScans = [
-  { id: "scan-1", name: "my-langchain-agent.zip", score: 78, findings: 5, date: "2026-03-18", framework: "LangChain" },
-  { id: "scan-2", name: "crewai-plugin-v2.zip", score: 42, findings: 3, date: "2026-03-17", framework: "CrewAI" },
-  { id: "scan-3", name: "safe-tool.zip", score: 12, findings: 0, date: "2026-03-15", framework: "OpenClaw" },
-  { id: "scan-4", name: "data-fetcher.zip", score: 65, findings: 4, date: "2026-03-14", framework: "LangChain" },
-];
+import { supabase, type Scan, type Profile } from "@/lib/supabase";
+import { useEffect, useState } from "react";
 
 const Dashboard = () => {
-  const scansUsed = 7;
-  const scanLimit = 10;
-  const plan = "Free";
+  const [scans, setScans] = useState<Scan[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Load profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      setProfile(profileData);
+
+      // Load scans
+      const { data: scansData } = await supabase
+        .from('scans')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      setScans(scansData || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const scansUsed = profile?.scans_used_this_month || 0;
+  const scanLimit = profile?.scan_limit || 10;
+  const plan = profile?.plan || "Free";
 
   return (
     <AppLayout>
@@ -54,7 +84,11 @@ const Dashboard = () => {
           <div className="px-4 py-3 border-b border-border">
             <h2 className="text-sm font-semibold">Scan History</h2>
           </div>
-          {mockScans.length === 0 ? (
+          {loading ? (
+            <div className="py-20 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            </div>
+          ) : scans.length === 0 ? (
             <div className="py-20 text-center">
               <ScanLine className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground">No scans yet. Run your first scan!</p>
@@ -77,17 +111,17 @@ const Dashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {mockScans.map((scan) => (
+                    {scans.map((scan) => (
                       <tr key={scan.id} className="border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer">
                         <td className="px-4 py-3">
                           <Link to={`/scan/${scan.id}`} className="text-foreground hover:text-primary transition-colors font-medium">
-                            {scan.name}
+                            {scan.skill_name}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground font-mono-data text-xs">{scan.framework}</td>
-                        <td className="px-4 py-3"><RiskBadge score={scan.score} /></td>
-                        <td className="px-4 py-3 font-mono-data text-muted-foreground">{scan.findings}</td>
-                        <td className="px-4 py-3 font-mono-data text-muted-foreground text-xs">{scan.date}</td>
+                        <td className="px-4 py-3 text-muted-foreground font-mono-data text-xs">{scan.framework || 'N/A'}</td>
+                        <td className="px-4 py-3"><RiskBadge score={scan.risk_score} /></td>
+                        <td className="px-4 py-3 font-mono-data text-muted-foreground">{scan.findings_count}</td>
+                        <td className="px-4 py-3 font-mono-data text-muted-foreground text-xs">{new Date(scan.created_at).toLocaleDateString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -95,16 +129,16 @@ const Dashboard = () => {
               </div>
               {/* Mobile cards */}
               <div className="sm:hidden divide-y divide-border">
-                {mockScans.map((scan) => (
+                {scans.map((scan) => (
                   <Link key={scan.id} to={`/scan/${scan.id}`} className="block p-4 hover:bg-accent/30 transition-colors">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-foreground truncate mr-2">{scan.name}</span>
-                      <RiskBadge score={scan.score} />
+                      <span className="text-sm font-medium text-foreground truncate mr-2">{scan.skill_name}</span>
+                      <RiskBadge score={scan.risk_score} />
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="font-mono-data">{scan.framework}</span>
-                      <span>{scan.findings} findings</span>
-                      <span className="font-mono-data">{scan.date}</span>
+                      <span className="font-mono-data">{scan.framework || 'N/A'}</span>
+                      <span>{scan.findings_count} findings</span>
+                      <span className="font-mono-data">{new Date(scan.created_at).toLocaleDateString()}</span>
                     </div>
                   </Link>
                 ))}
