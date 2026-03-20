@@ -293,6 +293,63 @@ const corsHeaders = {
   "Content-Type": "application/json",
 };
 
+// GitHub URL parsing
+function parseGithubUrl(url: string): { owner: string; repo: string; branch?: string } | null {
+  const match = url.match(/github\.com\/([^\/]+)\/([^\/]+?)(?:\/tree\/([^\/]+))?(?:\/|$)/);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2].replace(/\.git$/, ''), branch: match[3] };
+}
+
+// GitHub repository file fetcher
+async function fetchGithubFiles(owner: string, repo: string, branch?: string): Promise<Array<{ name: string; content: string }>> {
+  const branches = branch ? [branch] : ['main', 'master'];
+  let zipData: ArrayBuffer | null = null;
+  
+  for (const b of branches) {
+    const resp = await fetch(`https://github.com/${owner}/${repo}/archive/refs/heads/${b}.zip`);
+    if (resp.ok) {
+      zipData = await resp.arrayBuffer();
+      break;
+    }
+  }
+  
+  if (!zipData) throw new Error('Repository not found or is private');
+  
+  // JSZip으로 파싱
+  const JSZip = (await import("https://esm.sh/jszip@3.10.1")).default;
+  const zip = await JSZip.loadAsync(zipData);
+  
+  const files: Array<{ name: string; content: string }> = [];
+  const textExtensions = ['.py', '.js', '.ts', '.jsx', '.tsx', '.sh', '.bash', '.yaml', '.yml', '.json', '.md', '.txt'];
+  const ignoreDirs = ['node_modules', '.git', '__pycache__', 'dist', 'build', '.venv', 'venv'];
+  
+  for (const [path, file] of Object.entries(zip.files)) {
+    if (file.dir) continue;
+    
+    // 첫 폴더(repo-branch/) 제거
+    const relativePath = path.split('/').slice(1).join('/');
+    if (!relativePath) continue;
+    
+    // ignore dirs 체크
+    if (ignoreDirs.some(d => relativePath.includes(`${d}/`))) continue;
+    
+    // 텍스트 파일만
+    const ext = '.' + relativePath.split('.').pop()?.toLowerCase();
+    if (!textExtensions.includes(ext) && relativePath.includes('.')) continue;
+    
+    try {
+      const content = await file.async('text');
+      // 50KB 이상 파일 스킵
+      if (content.length > 50000) continue;
+      files.push({ name: relativePath, content });
+    } catch {
+      // binary 파일 스킵
+    }
+  }
+  
+  return files;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -300,10 +357,29 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const files = body.files;
+    let files = body.files;
     const skillName = body.skill_name || body.name || "Unknown";
     const framework = body.framework || null;
-    const source = body.source || null;
+    const source = body.source || body.github_url || null;
+
+    // GitHub URL이면 파일 다운로드
+    if (body.github_url && (!files || files.length === 0)) {
+      const parsed = parseGithubUrl(body.github_url);
+      if (!parsed) {
+        return new Response(
+          JSON.stringify({ error: "Invalid GitHub URL" }),
+          { status: 400, headers: corsHeaders }
+        );
+      }
+      try {
+        files = await fetchGithubFiles(parsed.owner, parsed.repo, parsed.branch);
+      } catch (e) {
+        return new Response(
+          JSON.stringify({ error: e.message || "Failed to fetch repository" }),
+          { status: 400, headers: corsHeaders }
+        );
+      }
+    }
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return new Response(

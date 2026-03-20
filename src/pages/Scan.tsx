@@ -50,30 +50,6 @@ const Scan = () => {
     try {
       setScanning(true);
 
-      let files: Array<{ name: string; content: string }> = [];
-
-      if (tab === "upload" && fileData) {
-        // Extract files from zip
-        const zip = await JSZip.loadAsync(fileData);
-        const filePromises: Promise<void>[] = [];
-
-        zip.forEach((relativePath, file) => {
-          if (!file.dir) {
-            filePromises.push(
-              file.async("text").then((content) => {
-                files.push({ name: relativePath, content });
-              })
-            );
-          }
-        });
-
-        await Promise.all(filePromises);
-      } else if (tab === "github" && githubUrl) {
-        // For now, just pass the URL to the edge function
-        // The edge function will handle downloading
-        files = [{ name: "github", content: githubUrl }];
-      }
-
       // Get auth token
       const { data: { session } } = await supabase.auth.getSession();
 
@@ -86,16 +62,54 @@ const Scan = () => {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/scan`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          files,
-          skill_name: fileName || githubUrl,
-          framework,
-          source: tab === "github" ? githubUrl : null,
-        }),
-      });
+      let response: Response;
+
+      if (tab === "github" && githubUrl) {
+        // Extract repo name from URL for skill_name
+        const repoMatch = githubUrl.match(/github\.com\/[^\/]+\/([^\/]+)/);
+        const repoName = repoMatch ? repoMatch[1] : githubUrl;
+
+        response = await fetch(`${supabaseUrl}/functions/v1/scan`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            github_url: githubUrl,
+            skill_name: repoName,
+            framework,
+            source: githubUrl,
+          }),
+        });
+      } else if (tab === "upload" && fileData) {
+        // Extract files from zip
+        const zip = await JSZip.loadAsync(fileData);
+        const filePromises: Promise<void>[] = [];
+        const files: Array<{ name: string; content: string }> = [];
+
+        zip.forEach((relativePath, file) => {
+          if (!file.dir) {
+            filePromises.push(
+              file.async("text").then((content) => {
+                files.push({ name: relativePath, content });
+              })
+            );
+          }
+        });
+
+        await Promise.all(filePromises);
+
+        response = await fetch(`${supabaseUrl}/functions/v1/scan`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            files,
+            skill_name: fileName,
+            framework,
+            source: null,
+          }),
+        });
+      } else {
+        throw new Error("No file or URL provided");
+      }
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Scan failed");
